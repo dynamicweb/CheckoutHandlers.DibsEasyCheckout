@@ -83,8 +83,6 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
 
         #endregion
 
-        private readonly Lazy<VariantOptionService> VariantOptionService = new Lazy<VariantOptionService>(() => new VariantOptionService());
-
         /// <summary>
 		/// Starts order checkout procedure
         /// </summary>
@@ -244,14 +242,13 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
 
         private object ConvertOrderLine(OrderLine orderline, ref long linesTotalPIP)
         {
-
             var unitName = "pcs";
             if (!string.IsNullOrWhiteSpace(orderline.UnitId))
             {
                 var unit = orderline.Product?.GetUnitList(orderline.Order.LanguageId).FirstOrDefault(u => u.Id == orderline.UnitId);
                 if (unit != null)
                 {
-                    unitName = VariantOptionService.Value.GetVariantOption(unit.Id, orderline.Order.LanguageId)?.Name;
+                    unitName = Services.VariantOptions.GetVariantOption(unit.Id)?.GetName(orderline.Order.LanguageId);
                 }
             }
             return GetLineItem(orderline.Id, orderline.ProductName, orderline.Quantity, orderline.Price, orderline.UnitPrice, unitName, ref linesTotalPIP);
@@ -786,8 +783,8 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
                     case "WindowMode":
                         return new Hashtable
                                    {
-                                       {WindowModes.Redirect.ToString(), Translate.Translate("Redirect")},
-                                       {WindowModes.Embedded.ToString(), Translate.Translate("Embedded")}
+                                       {WindowModes.Redirect.ToString(), Translator.Translate("Redirect")},
+                                       {WindowModes.Embedded.ToString(), Translator.Translate("Embedded")}
                                    };
 
                     default:
