@@ -783,8 +783,8 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
                     case "WindowMode":
                         return new Hashtable
                                    {
-                                       {WindowModes.Redirect.ToString(), Translator.Translate("Redirect")},
-                                       {WindowModes.Embedded.ToString(), Translator.Translate("Embedded")}
+                                       {WindowModes.Redirect.ToString(), "Redirect"},
+                                       {WindowModes.Embedded.ToString(), "Embedded"}
                                    };
 
                     default:
