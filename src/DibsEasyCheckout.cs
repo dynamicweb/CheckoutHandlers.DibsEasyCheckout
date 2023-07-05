@@ -28,6 +28,9 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
     ]
     public class DibsEasyCheckout : CheckoutHandler, IDropDownOptions, IRemoteCapture, ICancelOrder, IFullReturn
     {
+        private const string PostTemplateFolder = "eCom7/CheckoutHandler/DibsEasy/Form";
+        private const string ErrorTemplateFolder = "eCom7/CheckoutHandler/DibsEasy/Error";
+
         #region Addin parameters
 
         [AddInParameter("Test Secret key"), AddInParameterEditor(typeof(TextParameterEditor), "NewGUI=true; ")]
@@ -50,6 +53,9 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
 
         internal enum WindowModes { Redirect, Embedded }
         internal WindowModes windowMode = WindowModes.Embedded;
+        private string postTemplate = "eCom7/CheckoutHandler/DibsEasy/Form/EmbededDibs.html";
+        private string errorTemplate = "eCom7/CheckoutHandler/DibsEasy/Error/checkouthandler_error.html";
+
         [AddInLabel("Window Mode"), AddInParameter("WindowMode"), AddInParameterEditor(typeof(RadioParameterEditor), "")]
         public string WindowMode
         {
@@ -57,12 +63,24 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
             set { Enum.TryParse(value, out windowMode); }
         }
 
-        [AddInParameter("Post template"), AddInParameterEditor(typeof(TemplateParameterEditor), "folder=templates/eCom7/CheckoutHandler/DibsEasy/Form")]
-        public string PostTemplate { get; set; } = "eCom7/CheckoutHandler/DibsEasy/Form/EmbededDibs.html";
-
-        [AddInParameter("Error template"), AddInParameterEditor(typeof(TemplateParameterEditor), "folder=templates/eCom7/CheckoutHandler/DibsEasy/Error")]
-        public string ErrorTemplate { get; set; } = "eCom7/CheckoutHandler/DibsEasy/Error/checkouthandler_error.html";
-
+        [AddInParameter("Post template"), AddInParameterEditor(typeof(TemplateParameterEditor), $"folder=templates/{PostTemplateFolder}")]
+        public string PostTemplate
+        {
+            get
+            {
+                return TemplateHelper.GetTemplateName(postTemplate);
+            }
+            set => postTemplate = value;
+        }
+        [AddInParameter("Error template"), AddInParameterEditor(typeof(TemplateParameterEditor), $"folder=templates/{ErrorTemplateFolder}")]
+        public string ErrorTemplate
+        {
+            get
+            {
+                return TemplateHelper.GetTemplateName(errorTemplate);
+            }
+            set => errorTemplate = value;
+        }
         [AddInParameter("Auto capture"), AddInParameterEditor(typeof(YesNoParameterEditor), "")]
         public bool AutoCapture { get; set; }
 
@@ -94,8 +112,9 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
         {
             LogEvent(order, "Checkout started");
 
-            var formTemplate = new Template(PostTemplate);
-            return RenderPaymentForm(order, formTemplate, headless, receiptUrl);
+
+            var formTemplate = new Template(TemplateHelper.GetTemplatePath(PostTemplate, PostTemplateFolder));
+            return RenderPaymentForm(order, formTemplate);
         }
 
         #region payment request
@@ -361,7 +380,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
                 RedirectToCart(order);
             }
 
-            var errorTemplate = new Template(ErrorTemplate);
+            var errorTemplate = new Template(TemplateHelper.GetTemplatePath(ErrorTemplate, ErrorTemplateFolder));
             errorTemplate.SetTag("CheckoutHandler:ErrorMessage", msg);
 
             return Render(order, errorTemplate);
@@ -556,7 +575,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
                     }
                     var json_error = Converter.DeserializeCompact<Dictionary<string, object>>(response);
                     object errors = null;
-                    var errorMessage = json_error.TryGetValue("errors", out errors) ? errors.ToString() : $"{wexc.Message} { response}";
+                    var errorMessage = json_error.TryGetValue("errors", out errors) ? errors.ToString() : $"{wexc.Message} {response}";
                     errorMessage = $"Payment request failed with following errors: {errorMessage}";
                     throw new Exception(errorMessage);
                 }
@@ -809,7 +828,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
             if (RenderInline)
             {
                 LogEvent(order, "Render inline form");
-                var formTemplate = new Template(PostTemplate);
+                var formTemplate = new Template(TemplateHelper.GetTemplatePath(PostTemplate, PostTemplateFolder));
                 return RenderPaymentForm(order, formTemplate);
             }
 
@@ -835,7 +854,8 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
                 src = $"https://{src}";
 
                 var hostedPageUrl = string.Empty;
-                if (newPayment.TryGetValue("hostedPaymentPageUrl", out var url)) {
+                if (newPayment.TryGetValue("hostedPaymentPageUrl", out var url))
+                {
                     hostedPageUrl = $"{url}&language={Language}";
                 }
 
