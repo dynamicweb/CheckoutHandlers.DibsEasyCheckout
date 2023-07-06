@@ -106,9 +106,12 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
         /// </summary>
 		/// <param name="order">Order to be checked out</param>
 		/// <returns>String representation of template output</returns>
-        public override string StartCheckout(Order order)
+        public override string StartCheckout(Order order) => StartCheckout(order);
+
+        public override string StartCheckout(Order order, bool headless = false, string receiptUrl = "", string cancelUrl = "")
         {
             LogEvent(order, "Checkout started");
+
 
             var formTemplate = new Template(TemplateHelper.GetTemplatePath(PostTemplate, PostTemplateFolder));
             return RenderPaymentForm(order, formTemplate);
@@ -116,7 +119,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
 
         #region payment request
 
-        private object ConvertOrder(Order order)
+        private object ConvertOrder(Order order, bool headless = false, string? receiptUrl = null)
         {
             long linesTotalPIP = 0;
             var lineItems = new List<object>(order.OrderLines.Select(x => ConvertOrderLine(x, ref linesTotalPIP)));
@@ -173,8 +176,8 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
                 },
                 checkout = new
                 {
-                    url = windowMode == WindowModes.Redirect ? null : GetApprovetUrl(order),
-                    returnUrl = windowMode == WindowModes.Redirect ? GetApprovetUrl(order) : null,
+                    url = windowMode == WindowModes.Redirect ? null : receiptUrl ?? GetApprovetUrl(order),
+                    returnUrl = windowMode == WindowModes.Redirect ? receiptUrl ?? GetApprovetUrl(order) : null,
                     termsurl = GetTermsUrl(order),
                     integrationType = windowMode == WindowModes.Redirect ? "hostedPaymentPage" : "EmbeddedCheckout",
                     merchantHandlesConsumerData = PrefillCustomerAddress,
@@ -187,7 +190,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
                     {
                         new{
                             eventName = "payment.checkout.completed",
-                            url = GetApprovetUrl(order) + "&callback=true",
+                            url = GetApprovetUrl(order, headless) + "&callback=true",
                             authorization = "myAuthorizationKey"
                         }
                     }
@@ -300,9 +303,9 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
             return name;
         }
 
-        private string GetApprovetUrl(Order order)
+        private string GetApprovetUrl(Order order, bool headless = false)
         {
-            return string.Format("{0}&action={1}", GetBaseUrl(order), "Approve");
+            return string.Format("{0}&action={1}", GetBaseUrl(order, headless), "Approve");
         }
 
         private string GetTermsUrl(Order order)
@@ -832,11 +835,11 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
             return string.Empty;
         }
 
-        private string RenderPaymentForm(Order order, Template formTemplate)
+        private string RenderPaymentForm(Order order, Template formTemplate, bool headless = false, string? receiptUrl = null)
         {
             try
             {
-                var paymentRequest = ConvertOrder(order);
+                var paymentRequest = ConvertOrder(order, headless, receiptUrl);
                 var newPayment = ExecutePostRequest("payments", paymentRequest);
 
                 LogEvent(order, "Payment created.");
@@ -863,7 +866,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
                     { "checkoutKey", key },
                     { "checkoutSrc", src },
                     { "language", Language },
-                    { "invoiceApproveUrl", GetApprovetUrl(order) }
+                    { "invoiceApproveUrl", GetApprovetUrl(order, headless) }
                 };
 
                 foreach (var formValue in formValues)
