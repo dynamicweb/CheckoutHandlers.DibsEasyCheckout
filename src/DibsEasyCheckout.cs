@@ -63,7 +63,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
             set { Enum.TryParse(value, out windowMode); }
         }
 
-        [AddInParameter("Post template"), AddInParameterEditor(typeof(TemplateParameterEditor), $"folder=templates/{PostTemplateFolder}")]
+        [AddInParameter("Post template"), AddInParameterEditor(typeof(TemplateParameterEditor), $"folder=Templates/{PostTemplateFolder}")]
         public string PostTemplate
         {
             get
@@ -72,7 +72,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
             }
             set => postTemplate = value;
         }
-        [AddInParameter("Error template"), AddInParameterEditor(typeof(TemplateParameterEditor), $"folder=templates/{ErrorTemplateFolder}")]
+        [AddInParameter("Error template"), AddInParameterEditor(typeof(TemplateParameterEditor), $"folder=Templates/{ErrorTemplateFolder}")]
         public string ErrorTemplate
         {
             get
