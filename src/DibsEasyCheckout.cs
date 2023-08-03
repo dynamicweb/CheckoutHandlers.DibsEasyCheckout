@@ -1,4 +1,5 @@
-﻿using Dynamicweb.Core;
+﻿using Dynamicweb.Configuration;
+using Dynamicweb.Core;
 using Dynamicweb.Ecommerce.Cart;
 using Dynamicweb.Ecommerce.Orders;
 using Dynamicweb.Ecommerce.Orders.Gateways;
@@ -117,6 +118,32 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
             return RenderPaymentForm(order, formTemplate, headless, receiptUrl);
         }
 
+        protected override string GetBaseUrl(Order order, bool headless = false)
+        {
+            if (Context.Current is null)
+            {
+                return string.Empty;
+            }
+
+            // Write the port if it is not default
+            bool disablePortNumber = SystemConfiguration.Instance.GetValue("/Globalsettings/System/http/DisableBaseHrefPort") == "True";
+            string portString = Context.Current.Request.Url.IsDefaultPort || disablePortNumber ? string.Empty : string.Format(":{0}", Context.Current.Request.Url.Port);
+            string pageId = string.IsNullOrWhiteSpace(Context.Current.Request["ID"]) ? string.Empty : string.Format("ID={0}&", Context.Current.Request["ID"]);
+
+            if (headless)
+            {
+                var baseUrl = SystemConfiguration.Instance.GetValue("/Globalsettings/System/http/BaseUrl");
+                if (string.IsNullOrEmpty(baseUrl))
+                    baseUrl = $"{Context.Current.Request.Url.Scheme}://{Context.Current.Request.Url.Host}{portString}";
+
+                var url = $"{baseUrl}/dwapi/ecommerce/carts/callback?{OrderIdRequestName}={order.Id}";
+                return url;
+            }
+
+            // Base url
+            return string.Format("{0}://{1}{2}/Default.aspx?{3}{4}={5}", Context.Current.Request.Url.Scheme, Context.Current.Request.Url.Host, portString, pageId, OrderIdRequestName, order.Id);
+    }
+
         #region payment request
 
         private object ConvertOrder(Order order, bool headless = false, string? receiptUrl = null)
@@ -196,7 +223,8 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
                     }
                 }
             };
-
+            LogEvent(order, $"Serialized payment request: {Converter.SerializeCompact(payment)}");
+            LogEvent(order, $"Serialized webhooks: {Converter.SerializeCompact(payment.notifications.webhooks)}");
             return payment;
         }
 
