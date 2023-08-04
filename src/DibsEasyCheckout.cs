@@ -134,7 +134,11 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
             {
                 var baseUrl = SystemConfiguration.Instance.GetValue("/Globalsettings/System/http/BaseUrl");
                 if (string.IsNullOrEmpty(baseUrl))
-                    baseUrl = $"{Context.Current.Request.Url.Scheme}://{Context.Current.Request.Url.Host}{portString}";
+                {
+                    var scheme = Context.Current.Request.Headers.Get("X-Forwarded-Proto") ?? Context.Current.Request.Url.Scheme;
+                    var host = Context.Current.Request.Headers.Get("X-Forwarded-Host") ?? Context.Current.Request.Url.Host;
+                    baseUrl = $"{scheme}://{host}{portString}";
+                }
 
                 var url = $"{baseUrl}/dwapi/ecommerce/carts/callback?{OrderIdRequestName}={order.Id}";
                 return url;
