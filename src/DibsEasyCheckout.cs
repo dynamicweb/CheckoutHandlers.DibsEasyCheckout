@@ -8,7 +8,6 @@ using Dynamicweb.Environment.Helpers;
 using Dynamicweb.Extensibility.AddIns;
 using Dynamicweb.Extensibility.Editors;
 using Dynamicweb.Rendering;
-using Dynamicweb.SystemTools;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -16,6 +15,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Text;
+using System.Text.Json;
 using System.Web;
 
 namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
@@ -140,7 +140,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
                     baseUrl = $"{scheme}://{host}{portString}";
                 }
 
-                var url = $"{baseUrl}/dwapi/ecommerce/carts/callback?{OrderIdRequestName}={order.Id}";
+                var url = $"{baseUrl}/dwapi/ecommerce/carts/{order.Secret}/callback";
                 return url;
             }
 
@@ -227,8 +227,6 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
                     }
                 }
             };
-            LogEvent(order, $"Serialized payment request: {Converter.SerializeCompact(payment)}");
-            LogEvent(order, $"Serialized webhooks: {Converter.SerializeCompact(payment.notifications.webhooks)}");
             return payment;
         }
 
@@ -337,7 +335,14 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
 
         private string GetApprovetUrl(Order order, bool headless = false)
         {
-            return string.Format("{0}&action={1}", GetBaseUrl(order, headless), "Approve");
+            var baseUri = new UriBuilder(GetBaseUrl(order, headless));
+            var queryToAppend = "action=Approve";
+            if (baseUri.Query != null && baseUri.Query.Length > 1)
+                baseUri.Query = baseUri.Query[1..] + "&" + queryToAppend;
+            else
+                baseUri.Query = queryToAppend;
+
+            return baseUri.Uri.ToString();
         }
 
         private string GetTermsUrl(Order order)
@@ -427,7 +432,11 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
                 order.TransactionStatus = "Failed";
                 throw new Exception("Dibs payment failed.");
             }
-            string paymentId = Context.Current.Request["paymentId"];
+            var paymentId = Context.Current.Request["paymentId"];
+
+            var payment = JsonSerializer.DeserializeAsync<JsonElement>(Context.Current.Request.InputStream);
+            if (payment.IsCompleted && payment.Result.TryGetProperty("data", out var data) && data.TryGetProperty("paymentId", out var pid))
+                paymentId = pid.GetString();
 
             UpdateOrderInfo(paymentId, order);
 
