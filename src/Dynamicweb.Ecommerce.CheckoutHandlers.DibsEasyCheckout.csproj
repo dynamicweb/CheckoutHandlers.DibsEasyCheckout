@@ -1,18 +1,17 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 	<PropertyGroup>
-		<VersionPrefix>10.0.6</VersionPrefix>
+		<VersionPrefix>10.0.7</VersionPrefix>
 		<AssemblyVersion>1.0.0.0</AssemblyVersion>
-		<Description>DibsEasyCheckout</Description>
+		<Title>Nets Easy Checkout</Title>
+		<Description>Nets Easy Checkout</Description>
 	</PropertyGroup>
 	<PropertyGroup>
 		<PackageProjectUrl>https://doc.dynamicweb.com/</PackageProjectUrl>
-		<PackageTags>Dynamicweb dw10 addin ecommerce checkout</PackageTags>
-		<Title>Dibs/Nets Easy Checkout</Title>
-		<Description>Dibs/Nets Easy Checkout handler</Description>
+		<PackageTags>Dynamicweb dw10 addin commerce payment</PackageTags>
 		<Product>Dynamicweb CMS</Product>
 		<Company>Dynamicweb Software A/S</Company>
 		<Authors>Dynamicweb Software A/S</Authors>
-		<Copyright>Copyright © 2020 Dynamicweb Software A/S</Copyright>
+		<Copyright>Copyright © 2023 Dynamicweb Software A/S</Copyright>
 	</PropertyGroup>
 	<PropertyGroup>
 		<TargetFramework>net7.0</TargetFramework>
