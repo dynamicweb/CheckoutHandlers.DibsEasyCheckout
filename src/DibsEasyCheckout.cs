@@ -1,4 +1,13 @@
-﻿using Dynamicweb.Configuration;
+﻿using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Net;
+using System.Text;
+using System.Text.Json;
+using System.Web;
+using Dynamicweb.Configuration;
 using Dynamicweb.Core;
 using Dynamicweb.Ecommerce.Cart;
 using Dynamicweb.Ecommerce.Orders;
@@ -8,15 +17,6 @@ using Dynamicweb.Environment.Helpers;
 using Dynamicweb.Extensibility.AddIns;
 using Dynamicweb.Extensibility.Editors;
 using Dynamicweb.Rendering;
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Net;
-using System.Text;
-using System.Text.Json;
-using System.Web;
 
 namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
 {
@@ -27,7 +27,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
         AddInName("Dibs/Nets Easy checkout"),
         AddInDescription("Dibs/Nets Easy Checkout handler")
     ]
-    public class DibsEasyCheckout : CheckoutHandler, IDropDownOptions, IRemoteCapture, ICancelOrder, IFullReturn
+    public class DibsEasyCheckout : CheckoutHandler, IParameterOptions, IRemoteCapture, ICancelOrder, IFullReturn
     {
         private const string PostTemplateFolder = "eCom7/CheckoutHandler/DibsEasy/Form";
         private const string ErrorTemplateFolder = "eCom7/CheckoutHandler/DibsEasy/Error";
@@ -82,22 +82,22 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
             }
             set => errorTemplate = value;
         }
-        [AddInParameter("Auto capture"), AddInParameterEditor(typeof(YesNoParameterEditor), "")]
+        [AddInParameter("Auto capture"), AddInParameterEditor(typeof(YesNoParameterEditor), "infoText=Activates Auto-capture for orders – this causes all authorized orders to be immediately captured. Please note that in many countries it is illegal to capture an order before any goods have been shipped.;")]
         public bool AutoCapture { get; set; }
 
-        [AddInParameter("Render inline form"), AddInParameterEditor(typeof(YesNoParameterEditor), "")]
+        [AddInParameter("Render inline form"), AddInParameterEditor(typeof(YesNoParameterEditor), "infoText=Makes it possible to use this form inline Use the Ecom:Cart.PaymentInlineForm tag in the cart flow to render the form inline.;")]
         public bool RenderInline { get; set; }
 
-        [AddInParameter("Prefill customer address"), AddInParameterEditor(typeof(YesNoParameterEditor), "")]
+        [AddInParameter("Prefill customer address"), AddInParameterEditor(typeof(YesNoParameterEditor), "infoText=Posts information from previous steps to DIBS Easy instead of requiring them to be filled out again. If enabled you should ensure that the customer can't leave the customer billing fields empty when checking out or else DIBS easy will return errors.;")]
         public bool PrefillCustomerAddress { get; set; }
 
-        [AddInParameter("Support B2B"), AddInParameterEditor(typeof(YesNoParameterEditor), "")]
+        [AddInParameter("Support B2B"), AddInParameterEditor(typeof(YesNoParameterEditor), "infoText=Enables a \"Business checkout\" radio button in the DIBS easy payment window.;")]
         public bool SupportB2b { get; set; }
 
-        [AddInParameter("Set B2B as default"), AddInParameterEditor(typeof(YesNoParameterEditor), "")]
+        [AddInParameter("Set B2B as default"), AddInParameterEditor(typeof(YesNoParameterEditor), "infoText=If \"Support B2B\" is enabled and \"Set B2B as default\" then B2B fields are rendered by default in the DIBS easy payment window. The added B2B address fields vary from country to country.;")]
         public bool SetB2bAsDefault { get; set; }
 
-        [AddInParameter("Test mode"), AddInParameterEditor(typeof(YesNoParameterEditor), "")]
+        [AddInParameter("Test mode"), AddInParameterEditor(typeof(YesNoParameterEditor), "infoText=When enabled, the test credentials are used instead of the live credentials.;")]
         public bool TestMode { get; set; } = true;
 
         #endregion
@@ -146,7 +146,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
 
             // Base url
             return string.Format("{0}://{1}{2}/Default.aspx?{3}{4}={5}", Context.Current.Request.Url.Scheme, Context.Current.Request.Url.Host, portString, pageId, OrderIdRequestName, order.Id);
-    }
+        }
 
         #region payment request
 
@@ -821,13 +821,47 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
         }
         #endregion
 
-        #region IDropDownOptions
+        #region IParameterOptions
 
         /// <summary>
         /// Gets options according to behavior mode
         /// </summary>
         /// <param name="behaviorMode"></param>
         /// <returns>Key-value pairs of settings</returns>
+
+
+        public IEnumerable<ParameterOption> GetParameterOptions(string parameterName)
+        {
+            try
+            {
+                switch (parameterName)
+                {
+                    case "Language":
+                        return new List<ParameterOption> {
+                            new( "en-GB", "English" ),
+                            new("sv-SE", "Swedish" ),
+                            new("nb-NO", "Norwegian Bokmål" ),
+                            new("da-DK", "Danish" )
+                        };
+
+                    case "WindowMode":
+                        return new List<ParameterOption>
+                                   {
+                                       new(WindowModes.Redirect.ToString(), "Redirect"),
+                                       new(WindowModes.Embedded.ToString(), "Embedded")
+                                   };
+
+                    default:
+                        throw new ArgumentException(string.Format("Unknown dropdown name: '{0}'", parameterName));
+                }
+
+            }
+            catch (Exception ex)
+            {
+                LogError(null, ex, "Unhandled exception with message: {0}", ex.Message);
+                return null;
+            }
+        }
         public Hashtable GetOptions(string behaviorMode)
         {
             try
