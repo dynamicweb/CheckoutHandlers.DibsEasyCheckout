@@ -1,6 +1,6 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 	<PropertyGroup>
-		<VersionPrefix>10.0.7</VersionPrefix>
+		<VersionPrefix>10.6.0</VersionPrefix>
 		<AssemblyVersion>1.0.0.0</AssemblyVersion>
 		<Title>Nets Easy Checkout</Title>
 		<Description>Nets Easy Checkout</Description>
@@ -14,7 +14,7 @@
 		<Copyright>Copyright © 2023 Dynamicweb Software A/S</Copyright>
 	</PropertyGroup>
 	<PropertyGroup>
-		<TargetFramework>net7.0</TargetFramework>
+		<TargetFramework>net8.0</TargetFramework>
 		<GeneratePackageOnBuild>true</GeneratePackageOnBuild>
 		<IncludeSymbols>true</IncludeSymbols>
 		<EmbedUntrackedSources>true</EmbedUntrackedSources>
@@ -23,7 +23,17 @@
 		<SymbolPackageFormat>snupkg</SymbolPackageFormat>
 	</PropertyGroup>
 	<ItemGroup>
-		<PackageReference Include="Dynamicweb.Ecommerce" Version="10.0.34" />
+	  <None Remove="Updates\checkouthandler_error.cshtml" />
+	  <None Remove="Updates\EmbededDibs.cshtml" />
+	  <None Remove="Updates\HostedPaymentDibs.cshtml" />
+	</ItemGroup>
+	<ItemGroup>
+	  <EmbeddedResource Include="Updates\checkouthandler_error.cshtml" />
+	  <EmbeddedResource Include="Updates\EmbededDibs.cshtml" />
+	  <EmbeddedResource Include="Updates\HostedPaymentDibs.cshtml" />
+	</ItemGroup>
+	<ItemGroup>
+		<PackageReference Include="Dynamicweb.Ecommerce" Version="10.6.9" />
 		<PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
 		<PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.1.1" PrivateAssets="All" />
 		<PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.1.1" PrivateAssets="All" />

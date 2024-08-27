@@ -1,22 +1,19 @@
-﻿using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Net;
-using System.Text;
-using System.Text.Json;
-using System.Web;
-using Dynamicweb.Configuration;
+﻿using Dynamicweb.Configuration;
 using Dynamicweb.Core;
 using Dynamicweb.Ecommerce.Cart;
+using Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout.Models;
+using Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout.Models.Payment;
+using Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout.Service;
 using Dynamicweb.Ecommerce.Orders;
 using Dynamicweb.Ecommerce.Orders.Gateways;
 using Dynamicweb.Ecommerce.Prices;
-using Dynamicweb.Environment.Helpers;
 using Dynamicweb.Extensibility.AddIns;
 using Dynamicweb.Extensibility.Editors;
+using Dynamicweb.Frontend;
 using Dynamicweb.Rendering;
+using System;
+using System.Collections.Generic;
+using System.Threading;
 
 namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
 {
@@ -52,7 +49,6 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
         [AddInParameter("Terms page"), AddInParameterEditor(typeof(PageSelectEditor), "")]
         public string TermsPage { get; set; }
 
-        internal enum WindowModes { Redirect, Embedded }
         internal WindowModes windowMode = WindowModes.Embedded;
         private string postTemplate = "eCom7/CheckoutHandler/DibsEasy/Form/EmbededDibs.html";
         private string errorTemplate = "eCom7/CheckoutHandler/DibsEasy/Error/checkouthandler_error.html";
@@ -102,20 +98,20 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
 
         #endregion
 
-        /// <summary>
-		/// Starts order checkout procedure
-        /// </summary>
-		/// <param name="order">Order to be checked out</param>
-		/// <returns>String representation of template output</returns>
-        public override string StartCheckout(Order order) => StartCheckout(order);
 
-        public override string StartCheckout(Order order, bool headless = false, string receiptUrl = "", string cancelUrl = "")
+        /// <summary>
+        /// Starts order checkout procedure
+        /// </summary>
+        /// <param name="order">Order to be checked out</param>
+        /// <param name="parameters">Parameters</param>
+        /// <returns>String representation of template output</returns>
+        public override OutputResult BeginCheckout(Order order, CheckoutParameters parameters)
         {
             LogEvent(order, "Checkout started");
 
 
             var formTemplate = new Template(TemplateHelper.GetTemplatePath(PostTemplate, PostTemplateFolder));
-            return RenderPaymentForm(order, formTemplate, headless, receiptUrl);
+            return RenderPaymentForm(order, formTemplate, false, parameters?.ReceiptUrl);
         }
 
         protected override string GetBaseUrl(Order order, bool headless = false)
@@ -150,222 +146,12 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
 
         #region payment request
 
-        private object ConvertOrder(Order order, bool headless = false, string? receiptUrl = null)
-        {
-            long linesTotalPIP = 0;
-            var lineItems = new List<object>(order.OrderLines.Select(x => ConvertOrderLine(x, ref linesTotalPIP)));
-            if (order.ShippingFee.Price >= 0.01)
-            {
-                lineItems.Add(GetLineItem(order.ShippingMethodId, "ShippingFee", 1.0, order.ShippingFee, order.ShippingFee, "unit", ref linesTotalPIP));
-            }
-            if (order.PaymentFee.Price >= 0.01)
-            {
-                lineItems.Add(GetLineItem(order.PaymentMethodId, "PaymentFee", 1.0, order.PaymentFee, order.PaymentFee, "unit", ref linesTotalPIP));
-            }
-
-            var orderPriceWithoutVatPIP = order.Price.PricePIP;
-            if (linesTotalPIP != orderPriceWithoutVatPIP)
-            {
-                var roundingError = orderPriceWithoutVatPIP - linesTotalPIP;
-                lineItems.Add(new
-                {
-                    reference = "RoundingError",
-                    name = "RoundingError",
-                    quantity = 1.0,
-                    unitPrice = roundingError,
-                    unit = "unit",
-                    taxRate = 0,
-                    taxAmount = 0,
-                    grossTotalAmount = roundingError,
-                    netTotalAmount = roundingError
-                });
-            }
-
-            object supportedConsumerTypes = null;
-            if (SupportB2b)
-            {
-                var defaultConsumerType = "B2C";
-                if (SetB2bAsDefault)
-                {
-                    defaultConsumerType = "B2B";
-                }
-                supportedConsumerTypes = new
-                {
-                    @default = defaultConsumerType,
-                    supportedTypes = new[] { "B2C", "B2B" }
-                };
-            }
-
-            var payment = new
-            {
-                order = new
-                {
-                    items = lineItems,
-                    amount = order.Price.PricePIP,
-                    currency = order.CurrencyCode,
-                    reference = order.Id
-                },
-                checkout = new
-                {
-                    url = windowMode == WindowModes.Redirect ? null : receiptUrl ?? GetApprovetUrl(order),
-                    returnUrl = windowMode == WindowModes.Redirect ? receiptUrl ?? GetApprovetUrl(order) : null,
-                    termsurl = GetTermsUrl(order),
-                    integrationType = windowMode == WindowModes.Redirect ? "hostedPaymentPage" : "EmbeddedCheckout",
-                    merchantHandlesConsumerData = PrefillCustomerAddress,
-                    consumer = PrefillCustomerAddress ? GetConsumerData(order) : null,
-                    consumerType = supportedConsumerTypes
-                },
-                notifications = new
-                {
-                    webhooks = new[]
-                    {
-                        new{
-                            eventName = "payment.checkout.completed",
-                            url = GetApprovetUrl(order, headless) + "&callback=true",
-                            authorization = "myAuthorizationKey"
-                        }
-                    }
-                }
-            };
-            return payment;
-        }
-
-        //     "notifications": {
-        //    "webhooks": [
-        //        {
-        //            "eventName": "payment.created",
-        //            "url": "https://example.com/api/WebhookState",
-        //            "authorization": "myAuthorizationKey"
-        //        },
-        //        {
-        //            "eventName": "payment.checkout.completed",
-        //            "url": "https://example.com/api/WebhookState",
-        //            "authorization": "myAuthorizationKey"
-        //        }
-        //    ]
-        //}
-
-        private object GetConsumerData(Order order)
-        {
-            string firstName = Converter.ToString(order.CustomerFirstName);
-            string lastName = Converter.ToString(order.CustomerSurname);
-            var customerName = Converter.ToString(order.CustomerName).Trim();
-            var isDeliveryAddressFilled = !string.IsNullOrEmpty(order.DeliveryCountryCode);
-            var countryCode3 = Services.Countries.GetCountry(isDeliveryAddressFilled ? order.DeliveryCountryCode : order.CustomerCountryCode)?.Code3;
-
-            var delimeterPosition = customerName.IndexOf(' ');
-            if (string.IsNullOrWhiteSpace(firstName))
-            {
-                firstName = delimeterPosition > -1 ? customerName.Substring(0, delimeterPosition) : customerName;
-            }
-            if (string.IsNullOrWhiteSpace(lastName))
-            {
-                lastName = delimeterPosition > -1 ? customerName.Substring(delimeterPosition + 1) : customerName;
-            }
-
-            return new
-            {
-                email = Converter.ToString(order.CustomerEmail),
-                shippingAddress = new
-                {
-                    addressLine1 = isDeliveryAddressFilled ? order.DeliveryAddress : order.CustomerAddress,
-                    addressLine2 = isDeliveryAddressFilled ? order.DeliveryAddress2 : order.CustomerAddress2,
-                    postalCode = isDeliveryAddressFilled ? order.DeliveryZip : order.CustomerZip,
-                    city = isDeliveryAddressFilled ? order.DeliveryCity : order.CustomerCity,
-                    country = countryCode3
-                },
-                privatePerson = string.IsNullOrEmpty(order.CustomerCompany) ? new
-                {
-                    firstName = firstName,
-                    lastName = lastName
-                } : null,
-                company = !string.IsNullOrEmpty(order.CustomerCompany) ? new
-                {
-                    name = order.CustomerCompany,
-                    contact = new
-                    {
-                        firstName = firstName,
-                        lastName = lastName
-                    }
-                } : null
-            };
-        }
-
-        private object ConvertOrderLine(OrderLine orderline, ref long linesTotalPIP)
-        {
-            var unitName = "pcs";
-            if (!string.IsNullOrWhiteSpace(orderline.UnitId))
-            {
-                var unit = orderline.Product?.GetUnitList(orderline.Order.LanguageId).FirstOrDefault(u => u.Id == orderline.UnitId);
-                if (unit != null)
-                {
-                    unitName = Services.VariantOptions.GetVariantOption(unit.Id)?.GetName(orderline.Order.LanguageId);
-                }
-            }
-            return GetLineItem(orderline.Id, orderline.ProductName, orderline.Quantity, orderline.Price, orderline.UnitPrice, unitName, ref linesTotalPIP);
-        }
-
-        private static object GetLineItem(string reference, string name, double quantity, PriceInfo linePrice, PriceInfo unitPrice, string unitName, ref long linesTotalPIP)
-        {
-            linesTotalPIP += PriceHelper.ConvertToPIP(linePrice.Currency, linePrice.Price);
-            return new
-            {
-                reference = reference,
-                name = EncodeAndTruncateText(name),
-                quantity = quantity,
-                unitPrice = PriceHelper.ConvertToPIP(unitPrice.Currency, unitPrice.PriceWithoutVAT),
-                unit = EncodeAndTruncateText(unitName),
-                taxRate = PriceHelper.ConvertToPIP(linePrice.Currency, linePrice.VATPercent),
-                taxAmount = PriceHelper.ConvertToPIP(linePrice.Currency, linePrice.VAT),
-                grossTotalAmount = PriceHelper.ConvertToPIP(linePrice.Currency, linePrice.PriceWithVAT),
-                netTotalAmount = PriceHelper.ConvertToPIP(linePrice.Currency, linePrice.PriceWithoutVAT)
-            };
-        }
-
-        private static string EncodeAndTruncateText(string name)
-        {
-            //https://tech.dibspayment.com/easy/api/paymentapi "About the parameters"
-            name = HttpUtility.HtmlEncode(name);
-            if (name.Length > 128)
-            {
-                name = name.Substring(0, 128);
-            }
-            return name;
-        }
-
-        private string GetApprovetUrl(Order order, bool headless = false)
-        {
-            var baseUri = new UriBuilder(GetBaseUrl(order, headless));
-            var queryToAppend = "action=Approve";
-            if (baseUri.Query != null && baseUri.Query.Length > 1)
-                baseUri.Query = baseUri.Query[1..] + "&" + queryToAppend;
-            else
-                baseUri.Query = queryToAppend;
-
-            return baseUri.Uri.ToString();
-        }
-
-        private string GetTermsUrl(Order order)
-        {
-            if (!LinkHelper.IsLinkInternal(TermsPage))
-            {
-                return TermsPage;
-            }
-            else
-            {
-                var baseUrl = GetBaseUrl(order);
-                var baseUri = new Uri(baseUrl);
-                var pagePath = $"/{TermsPage.TrimStart('/')}";
-                return baseUrl.Replace(baseUri.PathAndQuery, pagePath);
-            }
-        }
-
         /// <summary>
         /// Redirects user to to Dibs CheckoutHandler step
         /// </summary>
         /// <param name="order">Order for processing</param>
         /// <returns>String representation of template output</returns>
-        public override string Redirect(Order order)
+        public override OutputResult HandleRequest(Order order)
         {
             try
             {
@@ -375,8 +161,6 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
                 switch (action)
                 {
                     case "Approve":
-                        return StateOk(order);
-
                     case "ApproveInvoce":
                         return StateOk(order);
 
@@ -386,9 +170,9 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
                         return PrintErrorTemplate(order, msg);
                 }
             }
-            catch (System.Threading.ThreadAbortException)
+            catch (ThreadAbortException)
             {
-                return string.Empty;
+                return ContentOutputResult.Empty;
             }
             catch (Exception ex)
             {
@@ -397,8 +181,9 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
             }
         }
 
+
         #endregion
-        private string PrintErrorTemplate(Order order, string msg)
+        private OutputResult PrintErrorTemplate(Order order, string msg)
         {
             LogEvent(order, "Printing error template");
 
@@ -408,22 +193,24 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
             Services.Orders.Save(order);
 
             Services.Orders.DowngradeToCart(order);
-            order.CartV2StepIndex = 0;
             order.TransactionStatus = "";
-            Dynamicweb.Ecommerce.Common.Context.SetCart(order);
+            Common.Context.SetCart(order);
 
             if (string.IsNullOrWhiteSpace(ErrorTemplate))
             {
-                RedirectToCart(order);
+                return PassToCart(order);
             }
 
             var errorTemplate = new Template(TemplateHelper.GetTemplatePath(ErrorTemplate, ErrorTemplateFolder));
             errorTemplate.SetTag("CheckoutHandler:ErrorMessage", msg);
 
-            return Render(order, errorTemplate);
+            return new ContentOutputResult
+            {
+                Content = Render(order, errorTemplate)
+            };
         }
 
-        private string StateOk(Order order)
+        private OutputResult StateOk(Order order)
         {
             LogEvent(order, "State ok");
 
@@ -433,15 +220,9 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
                 throw new Exception("Dibs payment failed.");
             }
             var paymentId = Context.Current.Request["paymentId"];
-
-            var payment = JsonSerializer.DeserializeAsync<JsonElement>(Context.Current.Request.InputStream);
-            if (payment.IsCompleted && payment.Result.TryGetProperty("data", out var data) && data.TryGetProperty("paymentId", out var pid))
-                paymentId = pid.GetString();
-
             UpdateOrderInfo(paymentId, order);
 
-            RedirectToCart(order);
-            return null;
+            return PassToCart(order);
         }
 
         #region Dibs API
@@ -457,30 +238,32 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
             try
             {
                 LogEvent(order, "Getting payment from Dibs by paymentId");
-                var payment = ExecutePostRequest($"payments/{paymentId}", null, "GET");
 
-                if (payment != null)
+                var service = new DibsService(GetSecretKey(), GetApiUrl());
+                DibsPaymentResponse paymentResponse = service.GetPayment(paymentId);
+
+                if (paymentResponse != null)
                 {
-                    var paymentInfo = (dynamic)payment["payment"];
+                    DibsPayment paymentInfo = paymentResponse.Payment;
                     LogEvent(order, "Payment succeeded with transaction number {0}", paymentId);
 
-                    var paymentType = Converter.ToString(paymentInfo["paymentDetails"]["paymentType"]);
-                    order.TransactionCardType = Converter.ToString(paymentInfo["paymentDetails"]["paymentMethod"]);
+                    var paymentType = paymentInfo.PaymentDetails.PaymentType;
+                    order.TransactionCardType = paymentInfo.PaymentDetails.PaymentMethod;
 
                     if (paymentType.ToLower() == "card")
                     {
-                        order.TransactionCardNumber = HideCardNumber(Converter.ToString(paymentInfo["paymentDetails"]["cardDetails"]["maskedPan"]));
+                        order.TransactionCardNumber = HideCardNumber(paymentInfo.PaymentDetails.CardDetails.MaskedPan);
                     }
                     else // invoice
                     {
-                        var invoiceDetails = paymentInfo["paymentDetails"]["invoiceDetails"];
+                        var invoiceDetails = paymentInfo.PaymentDetails.InvoiceDetails;
                         if (invoiceDetails != null)
                         {
-                            order.TransactionCardNumber = HideCardNumber(Converter.ToString(paymentInfo["paymentDetails"]["invoiceDetails"]["ocr"]));
+                            order.TransactionCardNumber = HideCardNumber(invoiceDetails.InvoiceNumber);
                         }
                     }
-                    var transactionAmount = Converter.ToInt32(paymentInfo["summary"]["reservedAmount"]);
-                    var paymentAmount = Converter.ToInt32(paymentInfo["orderDetails"]["amount"]);
+                    var transactionAmount = paymentInfo.Summary.ReservedAmount;
+                    var paymentAmount = paymentInfo.OrderDetails.Amount;
                     order.TransactionAmount = transactionAmount / 100d;
                     if (paymentAmount != transactionAmount)
                     {
@@ -503,8 +286,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
                                 order.CaptureAmount = paymentAmount / 100d;
                                 order.CaptureInfo.Message = "Autocapture successful";
 
-                                var service = new OrderService();
-                                service.Save(order);
+                                Services.Orders.Save(order);
                             }
                             catch (Exception ex)
                             {
@@ -532,15 +314,12 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
 
         private void ChargePayment(Order order, string paymentId, long chargeAmount)
         {
-            var chargeRequest = new
+            var service = new DibsService(GetSecretKey(), GetApiUrl());
+            CapturePaymentResponse charge = service.CapturePayment(paymentId, chargeAmount);
+
+            if (!string.IsNullOrWhiteSpace(charge?.ChargeId))
             {
-                amount = chargeAmount
-            };
-            var charge = ExecutePostRequest($"payments/{paymentId}/CHARGES", chargeRequest);
-            if (charge != null || !charge.ContainsKey("chargeId") || string.IsNullOrWhiteSpace(Converter.ToString(charge["chargeId"])))
-            {
-                var chargedId = Converter.ToString(charge["chargeId"]);
-                order.GatewayUniqueId = chargedId;
+                order.TransactionNumber = charge.ChargeId;
                 LogEvent(order, "Capturing order", DebuggingInfoType.CaptureResult);
                 order.CaptureInfo = new OrderCaptureInfo(OrderCaptureInfo.OrderCaptureState.Success, "Capture successful");
             }
@@ -548,32 +327,6 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
             {
                 throw new Exception("Charge request returned no charge info.");
             }
-        }
-
-        private Dictionary<string, object> ExecutePostRequest(string function, object body, string method = "POST")
-        {
-            HttpWebRequest request = WebRequest.CreateHttp(string.Format("{0}/v1/{1}", GetApiUrl(), function));
-            request.Method = method;
-            request.Timeout = 90 * 1000;
-            request.ContentType = "application/json"; // "application/json;charset=UTF-8"; //   
-            request.Accept = "application/json, text/plain, */*";
-            request.Headers.Set(HttpRequestHeader.Authorization, GetSecretKey());
-
-            if (body != null)
-            {
-                var strBody = Converter.SerializeCompact(body);
-
-                byte[] bytes = Encoding.UTF8.GetBytes(strBody);
-                request.ContentLength = bytes.Length;
-                using (Stream st = request.GetRequestStream())
-                {
-                    st.Write(bytes, 0, bytes.Length);
-                }
-            }
-
-            string result = ExecuteRequest(request);
-
-            return Converter.DeserializeCompact<Dictionary<string, object>>(result); ;
         }
 
         private string GetSecretKey()
@@ -592,38 +345,16 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
             return url;
         }
 
-        private string ExecuteRequest(WebRequest request)
+        private static string GetApprovetUrl(string baseUrl)
         {
-            string result = null;
-            try
-            {
-                using (var response = request.GetResponse())
-                {
-                    using (var streamReader = new StreamReader(response.GetResponseStream(), Encoding.UTF8))
-                    {
-                        result = streamReader.ReadToEnd();
-                    }
-                }
-            }
-            catch (WebException wexc)
-            {
-                if (wexc.Response != null)
-                {
-                    string response;
-                    using (StreamReader sr = new StreamReader(wexc.Response.GetResponseStream(), Encoding.UTF8))
-                    {
-                        response = sr.ReadToEnd();
-                    }
-                    var json_error = Converter.DeserializeCompact<Dictionary<string, object>>(response);
-                    object errors = null;
-                    var errorMessage = json_error.TryGetValue("errors", out errors) ? errors.ToString() : $"{wexc.Message} {response}";
-                    errorMessage = $"Payment request failed with following errors: {errorMessage}";
-                    throw new Exception(errorMessage);
-                }
-                throw;
-            }
+            var baseUri = new UriBuilder(baseUrl);
+            var queryToAppend = "action=Approve";
+            if (baseUri.Query != null && baseUri.Query.Length > 1)
+                baseUri.Query = baseUri.Query[1..] + "&" + queryToAppend;
+            else
+                baseUri.Query = queryToAppend;
 
-            return result;
+            return baseUri.Uri.ToString();
         }
 
         #endregion
@@ -739,7 +470,6 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
             {
                 OrderReturnInfo.SaveReturnOperation(OrderReturnOperationState.Failed, errorMessage, order.CaptureAmount, order);
             }
-
         }
 
         private string Refund(Order order)
@@ -755,20 +485,18 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
                     return errorMessage;
                 }
 
-                if (string.IsNullOrEmpty(order.TransactionNumber) || string.IsNullOrEmpty(order.GatewayUniqueId))
+                if (string.IsNullOrEmpty(order.TransactionNumber))
                 {
                     errorMessage = "Transaction number not set";
                     LogError(null, errorMessage);
                     return errorMessage;
                 }
 
-                var refundRequest = new
-                {
-                    amount = PriceHelper.ConvertToPIP(order.Currency, order.CaptureAmount)
-                };
+                long refundAmount = PriceHelper.ConvertToPIP(order.Currency, order.CaptureAmount);
+                var service = new DibsService(GetSecretKey(), GetApiUrl());
+                RefundPaymentResponse returnResponse = service.RefundPayment(order.TransactionNumber, refundAmount);
 
-                var returnResponce = ExecutePostRequest($"CHARGES/{order.GatewayUniqueId}/REFUNDS", refundRequest);
-                LogEvent(order, "Remote return id: {0}", returnResponce["refundId"]);
+                LogEvent(order, "Remote return id: {0}", returnResponse.RefundId);
                 LogEvent(order, "Return successful", DebuggingInfoType.ReturnResult);
                 return null;
             }
@@ -779,9 +507,11 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
                 return errorMessage;
             }
         }
+
         #endregion
 
         #region ICancelOrder
+
         public bool CancelOrder(Order order)
         {
             return Cancel(order);
@@ -804,12 +534,8 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
                     return false;
                 }
 
-                var cancelRequest = new
-                {
-                    amount = order.Price.PricePIP
-                };
-
-                var returnResponce = ExecutePostRequest($"PAYMENTS/{order.TransactionNumber}/CANCELS", cancelRequest);
+                var service = new DibsService(GetSecretKey(), GetApiUrl());
+                service.CancelPayment(order.TransactionNumber, order.Price.PricePIP);
                 LogEvent(order, "Order has been cancelled.");
                 return true;
             }
@@ -819,6 +545,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
                 return false;
             }
         }
+
         #endregion
 
         #region IParameterOptions
@@ -828,8 +555,6 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
         /// </summary>
         /// <param name="behaviorMode"></param>
         /// <returns>Key-value pairs of settings</returns>
-
-
         public IEnumerable<ParameterOption> GetParameterOptions(string parameterName)
         {
             try
@@ -837,54 +562,23 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
                 switch (parameterName)
                 {
                     case "Language":
-                        return new List<ParameterOption> {
-                            new( "en-GB", "English" ),
-                            new("sv-SE", "Swedish" ),
-                            new("nb-NO", "Norwegian Bokmål" ),
-                            new("da-DK", "Danish" )
+                        return new List<ParameterOption>
+                        {
+                            new("English", "en-GB"),
+                            new("Swedish", "sv-SE"),
+                            new("Norwegian Bokmål", "nb-NO"),
+                            new("Danish", "da-DK")
                         };
 
                     case "WindowMode":
                         return new List<ParameterOption>
-                                   {
-                                       new(WindowModes.Redirect.ToString(), "Redirect"),
-                                       new(WindowModes.Embedded.ToString(), "Embedded")
-                                   };
+                        {
+                            new("Redirect", WindowModes.Redirect),
+                            new("Embedded", WindowModes.Embedded)
+                        };
 
                     default:
                         throw new ArgumentException(string.Format("Unknown dropdown name: '{0}'", parameterName));
-                }
-
-            }
-            catch (Exception ex)
-            {
-                LogError(null, ex, "Unhandled exception with message: {0}", ex.Message);
-                return null;
-            }
-        }
-        public Hashtable GetOptions(string behaviorMode)
-        {
-            try
-            {
-                switch (behaviorMode)
-                {
-                    case "Language":
-                        return new Hashtable {
-                            { "en-GB", "English" },
-                            { "sv-SE", "Swedish" },
-                            { "nb-NO", "Norwegian Bokmål" },
-                            { "da-DK", "Danish" }
-                        };
-
-                    case "WindowMode":
-                        return new Hashtable
-                                   {
-                                       {WindowModes.Redirect.ToString(), "Redirect"},
-                                       {WindowModes.Embedded.ToString(), "Embedded"}
-                                   };
-
-                    default:
-                        throw new ArgumentException(string.Format("Unknown dropdown name: '{0}'", behaviorMode));
                 }
 
             }
@@ -898,24 +592,43 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
         #endregion
 
         #region RenderInlineForm
+
         public override string RenderInlineForm(Order order)
         {
             if (RenderInline)
             {
                 LogEvent(order, "Render inline form");
                 var formTemplate = new Template(TemplateHelper.GetTemplatePath(PostTemplate, PostTemplateFolder));
-                return RenderPaymentForm(order, formTemplate);
+                var outputResult = RenderPaymentForm(order, formTemplate);
+
+                if (outputResult is ContentOutputResult paymentFormData)
+                    return paymentFormData.Content;
+                if (outputResult is RedirectOutputResult)
+                    return "Unhandled exception. Please see logs to find the problem.";
             }
 
             return string.Empty;
         }
 
-        private string RenderPaymentForm(Order order, Template formTemplate, bool headless = false, string? receiptUrl = null)
+        private OutputResult RenderPaymentForm(Order order, Template formTemplate, bool headless = false, string? receiptUrl = null)
         {
             try
             {
-                var paymentRequest = ConvertOrder(order, headless, receiptUrl);
-                var newPayment = ExecutePostRequest("payments", paymentRequest);
+                string baseUrl = GetBaseUrl(order);
+                string approvetUrl = GetApprovetUrl(baseUrl);
+
+                var service = new DibsService(GetSecretKey(), GetApiUrl());
+                var newPayment = service.CreatePayment(order, new()
+                {
+                    BaseUrl = baseUrl,
+                    PrefillCustomerAddress = PrefillCustomerAddress,
+                    ReceiptUrl = receiptUrl,
+                    ApprovetUrl = approvetUrl,
+                    SetB2bAsDefault = SetB2bAsDefault,
+                    SupportB2b = SupportB2b,
+                    TermsPage = TermsPage,
+                    WindowMode = windowMode
+                });
 
                 LogEvent(order, "Payment created.");
 
@@ -929,19 +642,19 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
                 src = $"https://{src}";
 
                 var hostedPageUrl = string.Empty;
-                if (newPayment.TryGetValue("hostedPaymentPageUrl", out var url))
+                if (!string.IsNullOrWhiteSpace(newPayment.HostedPaymentPageUrl))
                 {
-                    hostedPageUrl = $"{url}&language={Language}";
+                    hostedPageUrl = $"{newPayment.HostedPaymentPageUrl}&language={Language}";
                 }
 
                 var formValues = new Dictionary<string, string>
                 {
                     { "hostedPaymentPageUrl", hostedPageUrl },
-                    { "paymentId", newPayment["paymentId"].ToString() },
+                    { "paymentId", newPayment.PaymentId },
                     { "checkoutKey", key },
                     { "checkoutSrc", src },
                     { "language", Language },
-                    { "invoiceApproveUrl", GetApprovetUrl(order, headless) }
+                    { "invoiceApproveUrl", approvetUrl }
                 };
 
                 foreach (var formValue in formValues)
@@ -950,7 +663,10 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
                 }
 
                 // Render and return
-                return Render(order, formTemplate);
+                return new ContentOutputResult
+                {
+                    Content = Render(order, formTemplate)
+                };
             }
             catch (Exception ex)
             {
@@ -958,6 +674,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
                 return PrintErrorTemplate(order, ex.Message);
             }
         }
+
         #endregion
     }
 }
