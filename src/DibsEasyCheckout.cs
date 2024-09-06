@@ -273,12 +273,17 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
                     else
                     {
                         order.TransactionStatus = "Succeeded";
-
+                        bool updateReference = order.Id.StartsWith("CART", StringComparison.Ordinal);
                         SetOrderComplete(order, paymentId);
+
+                        if (updateReference)
+                        {
+                            string url = GetApprovetUrl(GetBaseUrl(order));
+                            service.UpdatePaymentReference(paymentId, order.Id, url);
+                        }
 
                         if (AutoCapture)
                         {
-
                             try
                             {
                                 LogEvent(order, "Start autocapture request.");
@@ -397,13 +402,13 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
                 LogEvent(order, "Start autocapture request.");
                 ChargePayment(order, order.TransactionNumber, amount);
 
+                double capturedAmount = amount / 100d;
+
                 if (order.Price.PricePIP == amount)
-                {
-                    LogEvent(order, "Capture successful", DebuggingInfoType.CaptureResult);
-                }
+                    LogEvent(order, string.Format("Message=\"{0}\" Amount=\"{1:f2}\"", "Capture successful", capturedAmount), DebuggingInfoType.CaptureResult);
                 else
                 {
-                    LogEvent(order, String.Format("Message=\"{0}\" Amount=\"{1:f2}\"", "Split capture(final)", amount / 100f), DebuggingInfoType.CaptureResult);
+                    LogEvent(order, string.Format("Message=\"{0}\" Amount=\"{1:f2}\"", "Split capture (final)", capturedAmount), DebuggingInfoType.CaptureResult);
                     order.CaptureInfo.Message = "Split capture successful";
                 }
 

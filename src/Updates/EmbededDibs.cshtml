@@ -4,13 +4,9 @@
     <label>Order ID: <b>@GetString("Ecom:Order.ID")</b></label> <br />
     <label>Amount: <b>@GetString("Ecom:Order.Price.PriceWithVATFormatted")</b></label> <br />
 </p>
-
 <div id="dibs-complete-checkout"> </div>
 
 <script src="@GetString("DibsEasy.checkoutSrc")"></script>
-
-
-
 <script type="text/javascript" script-src="self">
     var key = "@GetString("DibsEasy.checkoutKey")";
     var paymentId = "@GetString("DibsEasy.paymentId")";
@@ -38,7 +34,3 @@
         });
     }
 </script>
-
-
-
-<div>@TemplateTags()</div>
