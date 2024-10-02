@@ -111,7 +111,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
 
 
             var formTemplate = new Template(TemplateHelper.GetTemplatePath(PostTemplate, PostTemplateFolder));
-            return RenderPaymentForm(order, formTemplate, false, parameters?.ReceiptUrl);
+            return RenderPaymentForm(order, formTemplate, true, parameters?.ReceiptUrl);
         }
 
         protected override string GetBaseUrl(Order order, bool headless = false)
@@ -614,7 +614,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
         {
             try
             {
-                string baseUrl = GetBaseUrl(order);
+                string baseUrl = GetBaseUrl(order, headless);
                 string approvetUrl = GetApprovetUrl(baseUrl);
 
                 var service = new DibsService(GetSecretKey(), GetApiUrl());
