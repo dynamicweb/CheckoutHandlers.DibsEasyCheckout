@@ -614,7 +614,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
         {
             try
             {
-                string baseUrl = GetBaseUrl(order);
+                string baseUrl = GetBaseUrl(order, headless);
                 string approvetUrl = GetApprovetUrl(baseUrl);
 
                 var service = new DibsService(GetSecretKey(), GetApiUrl());
