@@ -109,9 +109,9 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
         {
             LogEvent(order, "Checkout started");
 
-
+            bool headless = parameters is not null;
             var formTemplate = new Template(TemplateHelper.GetTemplatePath(PostTemplate, PostTemplateFolder));
-            return RenderPaymentForm(order, formTemplate, true, parameters?.ReceiptUrl);
+            return RenderPaymentForm(order, formTemplate, headless, parameters?.ReceiptUrl);
         }
 
         protected override string GetBaseUrl(Order order, bool headless = false)
