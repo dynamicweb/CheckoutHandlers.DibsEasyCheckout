@@ -230,7 +230,7 @@ internal sealed class DibsService
             //both first name and last name are required if Contact is serialized
             if (string.IsNullOrWhiteSpace(firstName))
                 firstName = "-";
-            if (string.IsNullOrWhiteSpace(lastName))
+            else
                 lastName = "-";
 
             return new()
