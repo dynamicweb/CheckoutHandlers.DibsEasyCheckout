@@ -25,6 +25,11 @@ internal enum ApiCommand
     /// </summary>
     CapturePayment,
 
+    /// <summary>
+    /// Updates the specified payment object with a new reference string and a checkoutUrl
+    /// PUT /payments/{paymentId}/referenceinformation
+    /// </summary>
+    UpdatePaymentReference,
 
     /// <summary>
     /// POST /charges/{operatorId}/refunds
