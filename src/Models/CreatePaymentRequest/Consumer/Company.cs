@@ -8,6 +8,6 @@ internal sealed class Company
     [DataMember(Name = "name")]
     public string Name { get; set; }
 
-    [DataMember(Name = "contact")]
+    [DataMember(Name = "contact", EmitDefaultValue = false)]
     public Contact Contact { get; set; }
 }

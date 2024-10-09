@@ -1,5 +1,8 @@
 ﻿using Dynamicweb.Core;
+using Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout.Models;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -47,9 +50,19 @@ internal static class DibsRequest
 
                         if (!response.IsSuccessStatusCode)
                         {
-                            string errorMessage = $"Unhandled exception. Operation failed: {response.ReasonPhrase}";
-                            //probably add some error handling later
-                            throw new Exception(errorMessage);
+                            var errorResponse = Converter.Deserialize<ErrorResponse>(data);
+                            if (errorResponse?.Errors?.Any() is true)
+                            {
+                                var errorMessage = new StringBuilder();
+                                foreach ((string propertyName, IEnumerable<string> errors) in errorResponse.Errors)
+                                {
+                                    string errorsText = string.Join(", ", errors);
+                                    errorMessage.AppendLine($"{propertyName}: {errorsText}");
+                                }
+                                throw new Exception(errorMessage.ToString());
+                            }
+
+                            throw new Exception($"Unhandled exception. Operation failed: {response.ReasonPhrase}");
                         }
 
                         return data;

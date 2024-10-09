@@ -196,48 +196,51 @@ internal sealed class DibsService
 
     private static Consumer GetConsumerData(Order order)
     {
-        string firstName = Converter.ToString(order.CustomerFirstName);
-        string lastName = Converter.ToString(order.CustomerSurname);
-        var customerName = Converter.ToString(order.CustomerName).Trim();
-        var isDeliveryAddressFilled = !string.IsNullOrEmpty(order.DeliveryCountryCode);
-        var countryCode3 = Services.Countries.GetCountry(isDeliveryAddressFilled ? order.DeliveryCountryCode : order.CustomerCountryCode)?.Code3;
-
-        var delimeterPosition = customerName.IndexOf(' ');
-        if (string.IsNullOrWhiteSpace(firstName))
-        {
-            firstName = delimeterPosition > -1 ? customerName.Substring(0, delimeterPosition) : customerName;
-        }
-        if (string.IsNullOrWhiteSpace(lastName))
-        {
-            lastName = delimeterPosition > -1 ? customerName.Substring(delimeterPosition + 1) : customerName;
-        }
+        bool isDeliveryAddressFilled = !string.IsNullOrEmpty(order.DeliveryCountryCode);
+        bool isCompanyDataFilled = !string.IsNullOrWhiteSpace(order.CustomerCompany);
+        string countryCode = Services.Countries.GetCountry(isDeliveryAddressFilled ? order.DeliveryCountryCode : order.CustomerCountryCode)?.Code3;
 
         return new()
         {
-            Email = Converter.ToString(order.CustomerEmail),
+            Email = order.CustomerEmail,
             ShippingAddress = new()
             {
                 AddressLine1 = isDeliveryAddressFilled ? order.DeliveryAddress : order.CustomerAddress,
                 AddressLine2 = isDeliveryAddressFilled ? order.DeliveryAddress2 : order.CustomerAddress2,
                 PostalCode = isDeliveryAddressFilled ? order.DeliveryZip : order.CustomerZip,
                 City = isDeliveryAddressFilled ? order.DeliveryCity : order.CustomerCity,
-                Country = countryCode3
+                Country = countryCode
             },
-            PrivatePerson = string.IsNullOrEmpty(order.CustomerCompany) ? new()
+            PrivatePerson = !isCompanyDataFilled ? GetContact(order) : null,
+            Company = isCompanyDataFilled ? new()
+            {
+                Name = order.CustomerCompany,
+                Contact = GetContact(order)
+            } : null
+        };
+    }
+
+    private static Contact GetContact(Order order)
+    {
+        string firstName = string.IsNullOrWhiteSpace(order.CustomerFirstName) ? order.CustomerName : order.CustomerFirstName;
+        string lastName = string.IsNullOrWhiteSpace(order.CustomerSurname) ? order.CustomerMiddleName : order.CustomerSurname;
+
+        if (!string.IsNullOrWhiteSpace(firstName) || !string.IsNullOrWhiteSpace(lastName))
+        {
+            //both first name and last name are required if Contact is serialized
+            if (string.IsNullOrWhiteSpace(firstName))
+                firstName = "-";
+            if (string.IsNullOrWhiteSpace(lastName))
+                lastName = "-";
+
+            return new()
             {
                 FirstName = firstName,
                 LastName = lastName
-            } : null,
-            Company = !string.IsNullOrEmpty(order.CustomerCompany) ? new()
-            {
-                Name = order.CustomerCompany,
-                Contact = new()
-                {
-                    FirstName = firstName,
-                    LastName = lastName
-                }
-            } : null
-        };
+            };
+        }
+
+        return null;
     }
 
     private static LineItem ConvertOrderLine(OrderLine orderline, ref long linesTotalPIP)

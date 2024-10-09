@@ -11,7 +11,7 @@ internal sealed class Consumer
     [DataMember(Name = "shippingAddress")]
     public ShippingAddress ShippingAddress { get; set; }
 
-    [DataMember(Name = "privatePerson")]
+    [DataMember(Name = "privatePerson", EmitDefaultValue = false)]
     public Contact PrivatePerson { get; set; }
 
     [DataMember(Name = "company")]
