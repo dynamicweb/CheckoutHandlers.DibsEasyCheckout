@@ -229,11 +229,13 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
                 using var reader = new StreamReader(Context.Current.Request.InputStream, Encoding.UTF8);
                 string inputStreamRawData = reader.ReadToEndAsync().ConfigureAwait(false).GetAwaiter().GetResult();
                 if (!string.IsNullOrWhiteSpace(inputStreamRawData))
+                {
                     LogEvent(order, $"Read the input stream data: {inputStreamRawData}");
 
-                PaymentCheckoutCompleted checkoutCompleted = Converter.Deserialize<PaymentCheckoutCompleted>(inputStreamRawData);
-                if (checkoutCompleted?.Data?.PaymentId is string pId)
-                    paymentId = pId;
+                    PaymentCheckoutCompleted checkoutCompleted = Converter.Deserialize<PaymentCheckoutCompleted>(inputStreamRawData);
+                    if (checkoutCompleted?.Data?.PaymentId is string pId)
+                        paymentId = pId;
+                }
             }
             catch (Exception ex)
             {
