@@ -21,17 +21,20 @@ internal sealed class DibsService
 
     public string SecretKey { get; set; }
 
-    public DibsService(string secretKey, string apiUrl)
+    public Order Order { get; set; }
+
+    public DibsService(Order order, string secretKey, string apiUrl)
     {
+        Order = order;
         SecretKey = secretKey;
         ApiUrl = apiUrl;
     }
 
-    public CreatePaymentResponse CreatePayment(Order order, CreatePaymentParameters parameters)
+    public CreatePaymentResponse CreatePayment(CreatePaymentParameters parameters)
     {
-        PaymentRequest request = ConvertOrder(order, parameters);
+        PaymentRequest request = ConvertOrder(Order, parameters);
 
-        string response = DibsRequest.SendRequest(ApiUrl, SecretKey, new()
+        string response = DibsRequest.SendRequest(Order, ApiUrl, SecretKey, new()
         {
             CommandType = ApiCommand.CreatePayment,
             Data = request
@@ -43,7 +46,7 @@ internal sealed class DibsService
     public DibsPaymentResponse GetPayment(string paymentId)
     {
 
-        string response = DibsRequest.SendRequest(ApiUrl, SecretKey, new()
+        string response = DibsRequest.SendRequest(Order, ApiUrl, SecretKey, new()
         {
             CommandType = ApiCommand.GetPayment,
             OperatorId = paymentId
@@ -54,7 +57,7 @@ internal sealed class DibsService
 
     public CapturePaymentResponse CapturePayment(string paymentId, long amount)
     {
-        string response = DibsRequest.SendRequest(ApiUrl, SecretKey, new()
+        string response = DibsRequest.SendRequest(Order, ApiUrl, SecretKey, new()
         {
             CommandType = ApiCommand.CapturePayment,
             OperatorId = paymentId,
@@ -69,7 +72,7 @@ internal sealed class DibsService
 
     public RefundPaymentResponse RefundPayment(string paymentId, long amount)
     {
-        string response = DibsRequest.SendRequest(ApiUrl, SecretKey, new()
+        string response = DibsRequest.SendRequest(Order, ApiUrl, SecretKey, new()
         {
             CommandType = ApiCommand.RefundPayment,
             OperatorId = paymentId,
@@ -84,7 +87,7 @@ internal sealed class DibsService
 
     public void CancelPayment(string paymentId, long amount)
     {
-        string response = DibsRequest.SendRequest(ApiUrl, SecretKey, new()
+        string response = DibsRequest.SendRequest(Order, ApiUrl, SecretKey, new()
         {
             CommandType = ApiCommand.CancelPayment,
             OperatorId = paymentId,

@@ -13,6 +13,8 @@ using Dynamicweb.Frontend;
 using Dynamicweb.Rendering;
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Text;
 using System.Threading;
 
 namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
@@ -219,7 +221,30 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
                 order.TransactionStatus = "Failed";
                 throw new Exception("Dibs payment failed.");
             }
+
             var paymentId = Context.Current.Request["paymentId"];
+
+            try
+            {
+                using var reader = new StreamReader(Context.Current.Request.InputStream, Encoding.UTF8);
+                string inputStreamRawData = reader.ReadToEndAsync().ConfigureAwait(false).GetAwaiter().GetResult();
+                if (!string.IsNullOrWhiteSpace(inputStreamRawData))
+                {
+                    LogEvent(order, $"Read the input stream data: {inputStreamRawData}");
+
+                    PaymentCheckoutCompleted checkoutCompleted = Converter.Deserialize<PaymentCheckoutCompleted>(inputStreamRawData);
+                    if (checkoutCompleted?.Data?.PaymentId is string pId)
+                        paymentId = pId;
+                }
+            }
+            catch (Exception ex)
+            {
+                LogError(order, $"Error during processing input stream to get the webhook data: {ex.Message}");
+            }
+
+            if (string.IsNullOrEmpty(paymentId))
+                throw new Exception("Payment id is empty.");
+
             UpdateOrderInfo(paymentId, order);
 
             return PassToCart(order);
@@ -239,7 +264,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
             {
                 LogEvent(order, "Getting payment from Dibs by paymentId");
 
-                var service = new DibsService(GetSecretKey(), GetApiUrl());
+                var service = new DibsService(order, GetSecretKey(), GetApiUrl());
                 DibsPaymentResponse paymentResponse = service.GetPayment(paymentId);
 
                 if (paymentResponse != null)
@@ -314,7 +339,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
 
         private void ChargePayment(Order order, string paymentId, long chargeAmount)
         {
-            var service = new DibsService(GetSecretKey(), GetApiUrl());
+            var service = new DibsService(order, GetSecretKey(), GetApiUrl());
             CapturePaymentResponse charge = service.CapturePayment(paymentId, chargeAmount);
 
             if (!string.IsNullOrWhiteSpace(charge?.ChargeId))
@@ -493,7 +518,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
                 }
 
                 long refundAmount = PriceHelper.ConvertToPIP(order.Currency, order.CaptureAmount);
-                var service = new DibsService(GetSecretKey(), GetApiUrl());
+                var service = new DibsService(order, GetSecretKey(), GetApiUrl());
                 RefundPaymentResponse returnResponse = service.RefundPayment(order.TransactionNumber, refundAmount);
 
                 LogEvent(order, "Remote return id: {0}", returnResponse.RefundId);
@@ -534,7 +559,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
                     return false;
                 }
 
-                var service = new DibsService(GetSecretKey(), GetApiUrl());
+                var service = new DibsService(order, GetSecretKey(), GetApiUrl());
                 service.CancelPayment(order.TransactionNumber, order.Price.PricePIP);
                 LogEvent(order, "Order has been cancelled.");
                 return true;
@@ -617,8 +642,8 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
                 string baseUrl = GetBaseUrl(order, headless);
                 string approvetUrl = GetApprovetUrl(baseUrl);
 
-                var service = new DibsService(GetSecretKey(), GetApiUrl());
-                var newPayment = service.CreatePayment(order, new()
+                var service = new DibsService(order, GetSecretKey(), GetApiUrl());
+                var newPayment = service.CreatePayment(new()
                 {
                     BaseUrl = baseUrl,
                     PrefillCustomerAddress = PrefillCustomerAddress,
