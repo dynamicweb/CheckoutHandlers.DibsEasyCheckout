@@ -10,6 +10,8 @@ internal sealed class CreatePaymentParameters
 
     public bool PrefillCustomerAddress { get; set; }
 
+    public bool EnableBillingAddress { get; set; }
+
     public string ReceiptUrl { get; set; }
 
     public string ApprovetUrl { get; set; }

@@ -11,6 +11,6 @@ internal sealed class Webhook
     [DataMember(Name = "url")]
     public string Url { get; set; }
 
-    [DataMember(Name = "authorization")]
+    [DataMember(Name = "authorization", EmitDefaultValue = false)]
     public string Authorization { get; set; }
 }
