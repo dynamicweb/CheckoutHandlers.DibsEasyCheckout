@@ -15,6 +15,6 @@ internal sealed class PaymentOrder
     [DataMember(Name = "currency")]
     public string Currency { get; set; }
 
-    [DataMember(Name = "reference")]
+    [DataMember(Name = "reference", EmitDefaultValue = false)]
     public string Reference { get; set; }
 }

@@ -21,10 +21,10 @@ internal sealed class LineItem
     [DataMember(Name = "unit")]
     public string Unit { get; set; }
 
-    [DataMember(Name = "taxRate")]
+    [DataMember(Name = "taxRate", EmitDefaultValue = false)]
     public long TaxRate { get; set; }
 
-    [DataMember(Name = "taxAmount")]
+    [DataMember(Name = "taxAmount", EmitDefaultValue = false)]
     public long TaxAmount { get; set; }
 
     [DataMember(Name = "grossTotalAmount")]

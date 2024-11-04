@@ -92,8 +92,11 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
         [AddInParameter("Support B2B"), AddInParameterEditor(typeof(YesNoParameterEditor), "infoText=Enables a \"Business checkout\" radio button in the DIBS easy payment window.;")]
         public bool SupportB2b { get; set; }
 
-        [AddInParameter("Set B2B as default"), AddInParameterEditor(typeof(YesNoParameterEditor), "infoText=If \"Support B2B\" is enabled and \"Set B2B as default\" then B2B fields are rendered by default in the DIBS easy payment window. The added B2B address fields vary from country to country.;")]
+        [AddInParameter("Set B2B as default"), AddInParameterEditor(typeof(YesNoParameterEditor), "infoText=If \"Support B2B\" is enabled and \"Set B2B as default\" then B2B fields are rendered by default in the DIBS easy payment window. The added B2B address fields vary from country to country.")]
         public bool SetB2bAsDefault { get; set; }
+
+        [AddInParameter("Enable billing address"), AddInParameterEditor(typeof(YesNoParameterEditor), "infoText=If set to true, the Dibs checkout form provides the option to specify separate billing and shipping addresses. If set to false, the billing address is used as the shipping address.")]
+        public bool EnableBillingAddress { get; set; }
 
         [AddInParameter("Test mode"), AddInParameterEditor(typeof(YesNoParameterEditor), "infoText=When enabled, the test credentials are used instead of the live credentials.;")]
         public bool TestMode { get; set; } = true;
@@ -645,14 +648,15 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
                 var service = new DibsService(order, GetSecretKey(), GetApiUrl());
                 var newPayment = service.CreatePayment(new()
                 {
-                    BaseUrl = baseUrl,
+                    WindowMode = windowMode,
+                    SupportB2b = SupportB2b,
+                    SetB2bAsDefault = SetB2bAsDefault,
                     PrefillCustomerAddress = PrefillCustomerAddress,
+                    EnableBillingAddress = EnableBillingAddress,
                     ReceiptUrl = receiptUrl,
                     ApprovetUrl = approvetUrl,
-                    SetB2bAsDefault = SetB2bAsDefault,
-                    SupportB2b = SupportB2b,
-                    TermsPage = TermsPage,
-                    WindowMode = windowMode
+                    BaseUrl = baseUrl,
+                    TermsPage = TermsPage
                 });
 
                 LogEvent(order, "Payment created.");
