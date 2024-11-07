@@ -11,6 +11,6 @@ internal sealed class PaymentRequest
     [DataMember(Name = "checkout")]
     public PaymentCheckout Checkout { get; set; }
 
-    [DataMember(Name = "notifications")]
+    [DataMember(Name = "notifications", EmitDefaultValue = false)]
     public Notifications Notifications { get; set; }
 }

@@ -5,9 +5,9 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout.Models.CreatePa
 [DataContract]
 internal sealed class Contact
 {
-    [DataMember(Name = "firstName")]
+    [DataMember(Name = "firstName", EmitDefaultValue = false)]
     public string FirstName { get; set; }
 
-    [DataMember(Name = "lastName")]
+    [DataMember(Name = "lastName", EmitDefaultValue = false)]
     public string LastName { get; set; }
 }

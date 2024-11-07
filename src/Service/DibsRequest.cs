@@ -1,5 +1,9 @@
 ﻿using Dynamicweb.Core;
+using Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout.Models;
+using Dynamicweb.Ecommerce.Orders;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -13,7 +17,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout.Service;
 /// </summary>
 internal static class DibsRequest
 {
-    public static string SendRequest(string apiUrl, string secretKey, CommandConfiguration configuration)
+    public static string SendRequest(Order order, string apiUrl, string secretKey, CommandConfiguration configuration)
     {
         using (var messageHandler = GetMessageHandler())
         {
@@ -45,16 +49,37 @@ internal static class DibsRequest
                 {
                     using (HttpResponseMessage response = requestTask.GetAwaiter().GetResult())
                     {
-                        string data = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+                        Log(order, $"Remote server response: HttpStatusCode = {response.StatusCode}, HttpStatusDescription = {response.ReasonPhrase}");
+                        string responseText = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+                        Log(order, $"Remote server ResponseText: {responseText}");
 
                         if (!response.IsSuccessStatusCode)
                         {
-                            string errorMessage = $"Unhandled exception. Operation failed: {response.ReasonPhrase}";
-                            //probably add some error handling later
-                            throw new Exception(errorMessage);
+                            if (response.StatusCode is HttpStatusCode.BadRequest)
+                            {
+                                var errorResponse = Converter.Deserialize<BadRequestResponse>(responseText);
+                                if (errorResponse?.Errors?.Any() is true)
+                                {
+                                    var errorMessage = new StringBuilder();
+                                    foreach ((string propertyName, IEnumerable<string> errors) in errorResponse.Errors)
+                                    {
+                                        string errorsText = string.Join(", ", errors);
+                                        errorMessage.AppendLine($"{propertyName}: {errorsText}");
+                                    }
+                                    throw new Exception(errorMessage.ToString());
+                                }
+                            }
+                            else if (response.StatusCode is HttpStatusCode.InternalServerError)
+                            {
+                                var errorResponse = Converter.Deserialize<InternalServerErrorResponse>(responseText);
+                                if (!string.IsNullOrEmpty(errorResponse?.Message))
+                                    throw new Exception($"Error code: {errorResponse.Code}. Error source: {errorResponse.Source}. Error message: {errorResponse.Message}");
+                            }
+
+                            throw new Exception($"Unhandled exception. Operation failed: {response.ReasonPhrase}. Response text: {responseText}");
                         }
 
-                        return data;
+                        return responseText;
                     }
                 }
                 catch (HttpRequestException requestException)
@@ -90,5 +115,13 @@ internal static class DibsRequest
         };
 
         string GetCommandLink(string gateway) => $"{baseAddress}/v1/{gateway}";
+    }
+
+    private static void Log(Order order, string message)
+    {
+        if (order is null)
+            return;
+
+        Services.OrderDebuggingInfos.Save(order, message, typeof(DibsEasyCheckout).FullName, DebuggingInfoType.Undefined);
     }
 }

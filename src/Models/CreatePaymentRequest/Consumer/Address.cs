@@ -3,20 +3,20 @@
 namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout.Models.CreatePaymentRequest;
 
 [DataContract]
-internal sealed class ShippingAddress
+internal sealed class Address
 {
-    [DataMember(Name = "addressLine1")]
+    [DataMember(Name = "addressLine1", EmitDefaultValue = false)]
     public string AddressLine1 { get; set; }
 
-    [DataMember(Name = "addressLine2")]
+    [DataMember(Name = "addressLine2", EmitDefaultValue = false)]
     public string AddressLine2 { get; set; }
 
-    [DataMember(Name = "postalCode")]
+    [DataMember(Name = "postalCode", EmitDefaultValue = false)]
     public string PostalCode { get; set; }
 
-    [DataMember(Name = "city")]
+    [DataMember(Name = "city", EmitDefaultValue = false)]
     public string City { get; set; }
 
-    [DataMember(Name = "country")]
+    [DataMember(Name = "country", EmitDefaultValue = false)]
     public string Country { get; set; }
 }

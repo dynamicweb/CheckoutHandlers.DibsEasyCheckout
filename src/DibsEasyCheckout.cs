@@ -13,6 +13,8 @@ using Dynamicweb.Frontend;
 using Dynamicweb.Rendering;
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Text;
 using System.Threading;
 
 namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
@@ -90,8 +92,11 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
         [AddInParameter("Support B2B"), AddInParameterEditor(typeof(YesNoParameterEditor), "infoText=Enables a \"Business checkout\" radio button in the DIBS easy payment window.;")]
         public bool SupportB2b { get; set; }
 
-        [AddInParameter("Set B2B as default"), AddInParameterEditor(typeof(YesNoParameterEditor), "infoText=If \"Support B2B\" is enabled and \"Set B2B as default\" then B2B fields are rendered by default in the DIBS easy payment window. The added B2B address fields vary from country to country.;")]
+        [AddInParameter("Set B2B as default"), AddInParameterEditor(typeof(YesNoParameterEditor), "infoText=If \"Support B2B\" is enabled and \"Set B2B as default\" then B2B fields are rendered by default in the DIBS easy payment window. The added B2B address fields vary from country to country.")]
         public bool SetB2bAsDefault { get; set; }
+
+        [AddInParameter("Enable billing address"), AddInParameterEditor(typeof(YesNoParameterEditor), "infoText=If set to true, the Dibs checkout form provides the option to specify separate billing and shipping addresses. If set to false, the billing address is used as the shipping address.")]
+        public bool EnableBillingAddress { get; set; }
 
         [AddInParameter("Test mode"), AddInParameterEditor(typeof(YesNoParameterEditor), "infoText=When enabled, the test credentials are used instead of the live credentials.;")]
         public bool TestMode { get; set; } = true;
@@ -109,9 +114,9 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
         {
             LogEvent(order, "Checkout started");
 
-
+            bool headless = parameters is not null;
             var formTemplate = new Template(TemplateHelper.GetTemplatePath(PostTemplate, PostTemplateFolder));
-            return RenderPaymentForm(order, formTemplate, false, parameters?.ReceiptUrl);
+            return RenderPaymentForm(order, formTemplate, headless, parameters?.ReceiptUrl);
         }
 
         protected override string GetBaseUrl(Order order, bool headless = false)
@@ -219,7 +224,30 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
                 order.TransactionStatus = "Failed";
                 throw new Exception("Dibs payment failed.");
             }
+
             var paymentId = Context.Current.Request["paymentId"];
+
+            try
+            {
+                using var reader = new StreamReader(Context.Current.Request.InputStream, Encoding.UTF8);
+                string inputStreamRawData = reader.ReadToEndAsync().ConfigureAwait(false).GetAwaiter().GetResult();
+                if (!string.IsNullOrWhiteSpace(inputStreamRawData))
+                {
+                    LogEvent(order, $"Read the input stream data: {inputStreamRawData}");
+
+                    PaymentCheckoutCompleted checkoutCompleted = Converter.Deserialize<PaymentCheckoutCompleted>(inputStreamRawData);
+                    if (checkoutCompleted?.Data?.PaymentId is string pId)
+                        paymentId = pId;
+                }
+            }
+            catch (Exception ex)
+            {
+                LogError(order, $"Error during processing input stream to get the webhook data: {ex.Message}");
+            }
+
+            if (string.IsNullOrEmpty(paymentId))
+                throw new Exception("Payment id is empty.");
+
             UpdateOrderInfo(paymentId, order);
 
             return PassToCart(order);
@@ -239,7 +267,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
             {
                 LogEvent(order, "Getting payment from Dibs by paymentId");
 
-                var service = new DibsService(GetSecretKey(), GetApiUrl());
+                var service = new DibsService(order, GetSecretKey(), GetApiUrl());
                 DibsPaymentResponse paymentResponse = service.GetPayment(paymentId);
 
                 if (paymentResponse != null)
@@ -319,7 +347,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
 
         private void ChargePayment(Order order, string paymentId, long chargeAmount)
         {
-            var service = new DibsService(GetSecretKey(), GetApiUrl());
+            var service = new DibsService(order, GetSecretKey(), GetApiUrl());
             CapturePaymentResponse charge = service.CapturePayment(paymentId, chargeAmount);
 
             if (!string.IsNullOrWhiteSpace(charge?.ChargeId))
@@ -498,7 +526,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
                 }
 
                 long refundAmount = PriceHelper.ConvertToPIP(order.Currency, order.CaptureAmount);
-                var service = new DibsService(GetSecretKey(), GetApiUrl());
+                var service = new DibsService(order, GetSecretKey(), GetApiUrl());
                 RefundPaymentResponse returnResponse = service.RefundPayment(order.TransactionNumber, refundAmount);
 
                 LogEvent(order, "Remote return id: {0}", returnResponse.RefundId);
@@ -539,7 +567,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
                     return false;
                 }
 
-                var service = new DibsService(GetSecretKey(), GetApiUrl());
+                var service = new DibsService(order, GetSecretKey(), GetApiUrl());
                 service.CancelPayment(order.TransactionNumber, order.Price.PricePIP);
                 LogEvent(order, "Order has been cancelled.");
                 return true;
@@ -619,20 +647,21 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
         {
             try
             {
-                string baseUrl = GetBaseUrl(order);
+                string baseUrl = GetBaseUrl(order, headless);
                 string approvetUrl = GetApprovetUrl(baseUrl);
 
-                var service = new DibsService(GetSecretKey(), GetApiUrl());
-                var newPayment = service.CreatePayment(order, new()
+                var service = new DibsService(order, GetSecretKey(), GetApiUrl());
+                var newPayment = service.CreatePayment(new()
                 {
-                    BaseUrl = baseUrl,
+                    WindowMode = windowMode,
+                    SupportB2b = SupportB2b,
+                    SetB2bAsDefault = SetB2bAsDefault,
                     PrefillCustomerAddress = PrefillCustomerAddress,
+                    EnableBillingAddress = EnableBillingAddress,
                     ReceiptUrl = receiptUrl,
                     ApprovetUrl = approvetUrl,
-                    SetB2bAsDefault = SetB2bAsDefault,
-                    SupportB2b = SupportB2b,
-                    TermsPage = TermsPage,
-                    WindowMode = windowMode
+                    BaseUrl = baseUrl,
+                    TermsPage = TermsPage
                 });
 
                 LogEvent(order, "Payment created.");

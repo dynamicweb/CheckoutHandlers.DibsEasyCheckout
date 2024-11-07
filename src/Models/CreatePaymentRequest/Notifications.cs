@@ -6,6 +6,6 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout.Models.CreatePa
 [DataContract]
 internal sealed class Notifications
 {
-    [DataMember(Name = "webhooks")]
+    [DataMember(Name = "webhooks", EmitDefaultValue = false)]
     public IEnumerable<Webhook> Webhooks { get; set; }
 }
