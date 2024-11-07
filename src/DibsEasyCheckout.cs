@@ -307,7 +307,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.DibsEasyCheckout
                         if (updateReference)
                         {
                             string url = GetApprovetUrl(GetBaseUrl(order));
-                            service.UpdatePaymentReference(paymentId, order.Id, url);
+                            service.UpdatePaymentReference(paymentId, url);
                         }
 
                         if (AutoCapture)

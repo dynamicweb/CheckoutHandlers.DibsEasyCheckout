@@ -77,16 +77,24 @@ internal sealed class DibsService
         return Converter.Deserialize<RefundPaymentResponse>(response);
     }
 
-    public void CancelPayment(string paymentId, long amount)
+    public void CancelPayment(string paymentId, long amount) => DibsRequest.SendRequest(Order, ApiUrl, SecretKey, new()
     {
-        string response = DibsRequest.SendRequest(Order, ApiUrl, SecretKey, new()
+        CommandType = ApiCommand.CancelPayment,
+        OperatorId = paymentId,
+        Data = new CancelPaymentRequest
         {
-            CommandType = ApiCommand.CancelPayment,
-            OperatorId = paymentId,
-            Data = new CancelPaymentRequest
-            {
-                Amount = amount
-            }
-        });
-    }
+            Amount = amount
+        }
+    });
+
+    public void UpdatePaymentReference(string paymentId, string checkoutUrl) => DibsRequest.SendRequest(Order, ApiUrl, SecretKey, new()
+    {
+        CommandType = ApiCommand.UpdatePaymentReference,
+        OperatorId = paymentId,
+        Data = new UpdatePaymentReferenceRequest
+        {
+            Reference = Order.Id,
+            CheckoutUrl = checkoutUrl
+        }
+    });
 }
