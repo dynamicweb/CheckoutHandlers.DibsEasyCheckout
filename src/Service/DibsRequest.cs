@@ -38,6 +38,8 @@ internal static class DibsRequest
                     ApiCommand.CapturePayment or
                     ApiCommand.CreatePayment or
                     ApiCommand.RefundPayment => client.PostAsync(apiCommand, GetContent()),
+                    //PUT
+                    ApiCommand.UpdatePaymentReference => client.PutAsync(apiCommand, GetContent()),
                     //GET                 
                     ApiCommand.GetPayment => client.GetAsync(apiCommand),
                     _ => throw new NotSupportedException($"Unknown operation was used. The operation code: {configuration.CommandType}.")
@@ -107,6 +109,7 @@ internal static class DibsRequest
             ApiCommand.GetPayment => GetCommandLink($"payments/{operatorId}"),
             ApiCommand.CancelPayment => GetCommandLink($"payments/{operatorId}/cancels"),
             ApiCommand.CapturePayment => GetCommandLink($"payments/{operatorId}/charges"),
+            ApiCommand.UpdatePaymentReference => GetCommandLink($"payments/{operatorId}/referenceinformation"),
             ApiCommand.RefundPayment => GetCommandLink($"charges/{operatorId}/refunds"),
             _ => throw new NotSupportedException($"The api command is not supported. Command: {command}")
         };
